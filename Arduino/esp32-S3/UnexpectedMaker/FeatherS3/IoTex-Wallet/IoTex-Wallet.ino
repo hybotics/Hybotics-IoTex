@@ -7,18 +7,15 @@
 #include "IoTeX-blockchain-client.h"
 #include <UMS3.h>
 
-#define DEFAULT_WIFI_WAIT_MS     150
+#define DEFAULT_WIFI_WAIT_MS    1000
 #define DEFAULT_BLINK_PERIOD_MS  100
 #define DEFAULT_PIXEL_NUMBER       0
 
-//  Define colors
-const uint32_t BLACK     = ums3.color(0, 0, 0);
-const uint32_t RED       = ums3.color(127, 0, 0);
-const uint32_t GREEN     = ums3.color(0, 127, 0);
-const uint32_t BLUE      = ums3.color(0, 0, 127);
-const uint32_t MAGENTA   = ums3.color(127, 0, 127);
+//  Initialize the UnexpectedMaker helper
+UMS3 ums3;
 
 #define DEFAULT_COLOR           BLUE
+#define MAX_CONNECT_ATTEMPTS    5
 
 constexpr const char ip[] = "gateway.iotexlab.io";
 constexpr const char baseUrl[] = "iotexapi.APIService";
@@ -26,10 +23,19 @@ constexpr const int port = 10000;
 
 //  Set the wallet address to check
 const char accountStr[] = "io1xkx7y9ygsa3dlmvzzyvv8zm6hd6rmskh4dawyu";
+
+//  Initialize color variables
+uint32_t BLACK;
+uint32_t RED;
+uint32_t GREEN;
+uint32_t BLUE;
+uint32_t MAGENTA;
+uint32_t YELLOW;
+
+bool network_ok;
  
 //  Create the IoTeX client connection
 Connection<Api> connection(ip, port, baseUrl);
-UMS3 ums3;
 
 void umBlinkPixel(uint8_t color=DEFAULT_COLOR, uint16_t period_ms=DEFAULT_BLINK_PERIOD_MS, uint8_t nr_cycles=1) {    
   uint16_t count;
@@ -42,22 +48,39 @@ void umBlinkPixel(uint8_t color=DEFAULT_COLOR, uint16_t period_ms=DEFAULT_BLINK_
   }  
 }
 
-void initWiFi() {
+bool initWiFi() {
+  uint8_t attempts = 0;
+  bool connected = true;
+  
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.print(F("Connecting to WiFi .."));
+  Serial.print(F("Attempting to connecting to WiFi .."));
 
-  while (WiFi.status() != WL_CONNECTED) {
-    umBlinkPixel(MAGENTA);  
-    Serial.print('.');
-    delay(DEFAULT_WIFI_WAIT_MS);
+  while ((WiFi.status() != WL_CONNECTED) and (attempts < MAX_CONNECT_ATTEMPTS)) {
+    attempts++;
+
+    Serial.print("Attempt #");
+    Serial.print(attempts);
+    Serial.println("..");
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+       
+    umBlinkPixel(YELLOW, DEFAULT_WIFI_WAIT_MS);  
   }
- 
-  Serial.print(F("\r\nConnected. IP: "));
-  Serial.println(WiFi.localIP());
+
+  if (attempts < MAX_CONNECT_ATTEMPTS) {
+    Serial.print(F("\r\nConnected. IP: "));
+    Serial.println(WiFi.localIP());
+  } else {
+    connected = false;    
+    Serial.print(F("\r\nUnable to connect to WiFi"));
+  }
+
+  return connected;  
 }
  
 void setup(void) {
+  bool connected;
+
   Serial.begin(115200);
 
   ums3.begin();
@@ -66,51 +89,58 @@ void setup(void) {
   //  Initialize the onboard NeoPixel        
   ums3.setPixelColor(BLACK); 
 
+  //  Define colors
+  BLACK     = ums3.color(0, 0, 0);
+  RED       = ums3.color(127, 0, 0);
+  GREEN     = ums3.color(0, 127, 0);
+  BLUE      = ums3.color(0, 0, 127);
+  MAGENTA   = ums3.color(127, 0, 127);
+  YELLOW    = ums3.color(127, 127, 0);
+
   //  Connect to the wifi network
-  initWiFi();
- 
-  //  Configure the LED pin
-  pinMode(ONBOARD_LED_PIN, OUTPUT);
+  network_ok = initWiFi();
 }
  
 void loop(void) {
-  // Query the account metadata
-  AccountMeta accountMeta;
-  ResultCode result = connection.api.wallets.getAccount(accountStr, accountMeta);
- 
-  // Print the result
-  Serial.print("Result: ");
-  Serial.println(IotexHelpers.GetResultString(result));
- 
-  // If the query suceeded, print the account metadata
-  if (result == ResultCode::SUCCESS) {
-    Serial.print("Balance: ");
-    Serial.println(accountMeta.balance);
-    Serial.print(F("Nonce: "));
-    Serial.println(accountMeta.nonce.c_str());
-    Serial.print(F("PendingNonce: "));
-    Serial.println(accountMeta.pendingNonce.c_str());
-    Serial.print(F("NumActions: "));
-    Serial.println(accountMeta.numActions.c_str());
-    Serial.print(F("IsContract: "));
-    Serial.println(accountMeta.isContract ? "\"true\"" : "\"false\"");
-  }
- 
-  // Enable the onboard led if the balance is > 0.01 IOTX)
-  Bignum b = Bignum(accountMeta.balance, NumericBase::Base10);
-  Bignum zero = Bignum("0", NumericBase::Base10);
-
-  if (b == zero) {
-    digitalWrite(ONBOARD_LED_PIN, LOW);
-    ums3.setPixelColor(BLACK);
-  } else {
-    digitalWrite(ONBOARD_LED_PIN, HIGH);
+  if (network_ok) {
     ums3.setPixelColor(GREEN);
-  }
+
+    // Query the account metadata
+    AccountMeta accountMeta;
+    ResultCode result = connection.api.wallets.getAccount(accountStr, accountMeta);
   
-  Serial.println("Program finished");
- 
-  while (true) {
-    delay(1000);
+    // Print the result
+    Serial.print("Result: ");
+    Serial.println(IotexHelpers.GetResultString(result));
+  
+    // If the query suceeded, print the account metadata
+    if (result == ResultCode::SUCCESS) {
+      Serial.print("Balance: ");
+      Serial.println(accountMeta.balance);
+      Serial.print(F("Nonce: "));
+      Serial.println(accountMeta.nonce.c_str());
+      Serial.print(F("PendingNonce: "));
+      Serial.println(accountMeta.pendingNonce.c_str());
+      Serial.print(F("NumActions: "));
+      Serial.println(accountMeta.numActions.c_str());
+      Serial.print(F("IsContract: "));
+      Serial.println(accountMeta.isContract ? "\"true\"" : "\"false\"");
+    }
+  
+    // Enable the onboard led if the balance is > 0.01 IOTX)
+    Bignum b = Bignum(accountMeta.balance, NumericBase::Base10);
+    Bignum zero = Bignum("0", NumericBase::Base10);
+
+    if (b == zero) {
+      ums3.setPixelColor(BLACK);
+    } else {
+      ums3.setPixelColor(MAGENTA);
+    }
+  } else {
+    while (!network_ok) {
+      umBlinkPixel(RED, DEFAULT_WIFI_WAIT_MS);  
+    }
   }
+
+  Serial.println("Program finished");
 }
