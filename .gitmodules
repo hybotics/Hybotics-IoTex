@@ -1,0 +1,6 @@
+[submodule "Arduino/libraries/iotex-arduino-sdk"]
+	path = Arduino/libraries/iotex-arduino-sdk
+	url = git@github.com:hybotics/iotex-arduino-sdk.git
+[submodule "Arduino/libraries/UnexpectedMaker-ESP32-S3"]
+	path = Arduino/libraries/UnexpectedMaker-ESP32-S3
+	url = git@github.com:hybotics/UnexpectedMaker-ESP32-S3.git

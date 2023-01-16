@@ -3,13 +3,14 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <UMS3.h>
 #include "Secrets.h"
 #include "IoTeX-blockchain-client.h"
-#include <UMS3.h>
 
 #define DEFAULT_WIFI_WAIT_MS    1000
 #define DEFAULT_BLINK_PERIOD_MS  100
 #define DEFAULT_PIXEL_NUMBER       0
+#define DEFAUT_LOOP_WAIT_MS     1000
 
 //  Initialize the UnexpectedMaker helper
 UMS3 ums3;
@@ -32,7 +33,7 @@ uint32_t BLUE;
 uint32_t MAGENTA;
 uint32_t YELLOW;
 
-bool network_ok;
+bool wifi_connected;
  
 //  Create the IoTeX client connection
 Connection<Api> connection(ip, port, baseUrl);
@@ -48,12 +49,12 @@ void umBlinkPixel(uint8_t color=DEFAULT_COLOR, uint16_t period_ms=DEFAULT_BLINK_
   }  
 }
 
-bool initWiFi() {
+bool initWiFi(char ssid[]=WIFI_SSID, char password[]=WIFI_PASSWORD) {
   uint8_t attempts = 0;
   bool connected = true;
   
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(ssid, password);
   Serial.print(F("Attempting to connecting to WiFi .."));
 
   while ((WiFi.status() != WL_CONNECTED) and (attempts < MAX_CONNECT_ATTEMPTS)) {
@@ -62,7 +63,7 @@ bool initWiFi() {
     Serial.print("Attempt #");
     Serial.print(attempts);
     Serial.println("..");
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.begin(ssid, password);
        
     umBlinkPixel(YELLOW, DEFAULT_WIFI_WAIT_MS);  
   }
@@ -70,9 +71,11 @@ bool initWiFi() {
   if (attempts < MAX_CONNECT_ATTEMPTS) {
     Serial.print(F("\r\nConnected. IP: "));
     Serial.println(WiFi.localIP());
+    ums3.setPixelColor(GREEN);
   } else {
     connected = false;    
     Serial.print(F("\r\nUnable to connect to WiFi"));
+    ums3.setPixelColor(RED);
   }
 
   return connected;  
@@ -98,11 +101,11 @@ void setup(void) {
   YELLOW    = ums3.color(127, 127, 0);
 
   //  Connect to the wifi network
-  network_ok = initWiFi();
+  wifi_connected = initWiFi(WIFI_SSID, WIFI_PASSWORD);
 }
  
 void loop(void) {
-  if (network_ok) {
+  if (wifi_connected) {
     ums3.setPixelColor(GREEN);
 
     // Query the account metadata
@@ -137,10 +140,12 @@ void loop(void) {
       ums3.setPixelColor(MAGENTA);
     }
   } else {
-    while (!network_ok) {
+    while (!wifi_connected) {
       umBlinkPixel(RED, DEFAULT_WIFI_WAIT_MS);  
     }
   }
-
-  Serial.println("Program finished");
+  
+  while (true) {
+    delay(DEFAUT_LOOP_WAIT_MS);  
+  }
 }
